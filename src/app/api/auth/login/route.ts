@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { prisma } from "@/lib/db";
+import { prisma, ensureDemoUsersExist } from "@/lib/db";
 import { comparePassword, createSessionToken, COOKIE_NAME, logAuditEvent, checkRateLimit } from "@/lib/auth";
+
+export const dynamic = "force-dynamic";
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -29,6 +31,9 @@ export async function POST(req: NextRequest) {
     }
 
     const { email, password } = parsed.data;
+
+    // Ensure demo accounts are seeded if database is fresh in /tmp
+    await ensureDemoUsersExist();
 
     const user = await prisma.user.findUnique({
       where: { email: email.toLowerCase().trim() },
