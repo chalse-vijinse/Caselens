@@ -1,0 +1,143 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id               String               @id @default(cuid())
+  email            String               @unique
+  name             String
+  passwordHash     String
+  role             String               @default("BUREAU_OFFICER") // ADMIN, BUREAU_OFFICER, REGIONAL_OFFICER
+  department       String?
+  region           String?              // e.g. North, South, East, West, Central, HQ
+  isActive         Boolean              @default(true)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  assignedCases    Complaint[]          @relation("AssignedOfficer")
+  remarks          CaseRemark[]
+  statusHistories  CaseStatusHistory[]
+  reviewedOverlaps OverlapSuggestion[]  @relation("ReviewedBy")
+  auditLogs        AuditLog[]
+}
+
+model Institution {
+  id              String      @id @default(cuid())
+  name            String      @unique
+  aictePid        String      @unique
+  region          String      // North, South, East, West, Central, North-West, South-West
+  state           String
+  city            String
+  institutionType String      @default("Engineering & Technology")
+  isDemo          Boolean     @default(true)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  complaints      Complaint[]
+}
+
+model Complaint {
+  id                 String               @id @default(cuid())
+  caseId             String               @unique // Format: AICTE-2026-XXXXX
+  studentName        String
+  studentEmail       String
+  studentPhone       String?
+  institutionId      String
+  institution        Institution          @relation(fields: [institutionId], references: [id])
+  aictePid           String?
+  category           String
+  subject            String
+  description        String
+  referenceNumber    String?
+  status             String               @default("SUBMITTED") // SUBMITTED, UNDER_REVIEW, ASSIGNED, IN_PROGRESS, RESOLVED, CLOSED
+  priority           String               @default("MEDIUM")    // LOW, MEDIUM, HIGH, CRITICAL
+  department         String?              @default("Grievance Redressal Cell")
+  assignedOfficerId  String?
+  assignedOfficer    User?                @relation("AssignedOfficer", fields: [assignedOfficerId], references: [id])
+  resolutionNotes    String?
+  isOverdue          Boolean              @default(false)
+  dueDate            DateTime?
+  isDemo             Boolean              @default(false)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  remarks            CaseRemark[]
+  statusHistory      CaseStatusHistory[]
+  sourceOverlaps     OverlapSuggestion[]  @relation("SourceCase")
+  targetOverlaps     OverlapSuggestion[]  @relation("TargetCase")
+}
+
+model CaseRemark {
+  id          String    @id @default(cuid())
+  caseId      String
+  complaint   Complaint @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  remark      String
+  isInternal  Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+}
+
+model CaseStatusHistory {
+  id             String    @id @default(cuid())
+  caseId         String
+  complaint      Complaint @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  changedById    String?
+  changedBy      User?     @relation(fields: [changedById], references: [id])
+  previousStatus String
+  newStatus      String
+  reason         String?
+  createdAt      DateTime  @default(now())
+}
+
+model OverlapSuggestion {
+  id               String     @id @default(cuid())
+  sourceCaseId     String
+  sourceCase       Complaint  @relation("SourceCase", fields: [sourceCaseId], references: [id], onDelete: Cascade)
+  targetCaseId     String
+  targetCase       Complaint  @relation("TargetCase", fields: [targetCaseId], references: [id], onDelete: Cascade)
+  similarityScore  Float      // 0 to 100 overall weighted score
+  textSimilarity   Float      // 0 to 100
+  institutionMatch Float      // 0 to 100
+  categoryMatch    Float      // 0 to 100
+  dateProximity    Float      // 0 to 100
+  matchedFactors   String     // JSON array of strings
+  reasons          String
+  confidenceLevel  String     // HIGH_CONFIDENCE, POTENTIAL_MATCH, NEEDS_REVIEW
+  status           String     @default("SUGGESTED") // SUGGESTED, CONFIRMED_OVERLAP, REJECTED
+  reviewedById     String?
+  reviewedBy       User?      @relation("ReviewedBy", fields: [reviewedById], references: [id])
+  reviewNotes      String?
+  reviewedAt       DateTime?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  @@unique([sourceCaseId, targetCaseId])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  userEmail  String?
+  userRole   String?
+  action     String
+  entityType String
+  entityId   String?
+  details    String
+  ipAddress  String?  @default("127.0.0.1")
+  createdAt  DateTime @default(now())
+}
+
+model AppSetting {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String
+  description String?
+  updatedAt   DateTime @updatedAt
+}
